@@ -1,13 +1,13 @@
 (ns ^{:author "Paula Gearon"}
     quoll.icd11.json-ld
   (:require [donatello.ttl :as ttl])
-  (:import [java.io StringReader]
+  (:import [java.io ByteArrayInputStream]
            [java.net URI]
-           [java.util Optional]
-           [com.apicatalog.jsonld JsonLd]
-           [com.apicatalog.jsonld.api ToRdfApi]
-           [com.apicatalog.jsonld.document JsonDocument]
-           [com.apicatalog.rdf RdfDataset RdfGraph RdfTriple RdfLiteral RdfResource RdfValue]))
+           [com.fasterxml.jackson.databind ObjectMapper]
+           [com.apicatalog.tree.io.jakcson Jackson2Parser]
+           [com.apicatalog.jsonld JsonLd Options]
+           [com.apicatalog.jsonld Document]
+           [com.apicatalog.rdf.api RdfQuadConsumer]))
 
 (def blank-node-context (volatile! {}))
 
@@ -27,47 +27,47 @@
   ;;(str "<" s ">")
   (URI. s))
 
-(defn rsc
-  [^RdfValue n]
-  (let [v (.getValue n)]
-    (cond
-      (.isIRI n) (uri v)
-      (.isLiteral n) (let [^RdfLiteral l (.asLiteral n)
-                           ^Optional lango (.getLanguage l)]
-                       (if (.isPresent lango)
-                         (ttl/lang-literal v (.get lango))
-                         (let [dt (.getDatatype l)]
-                           (if (= xsd-string dt)
-                             v
-                             (ttl/typed-literal v (uri dt))))))
-      (.isBlankNode n) (blank-node v)
-      :default (throw (ex-info (str "Illegal resource type: " n) {:resource n})))))
+(defn to-subject
+  [s]
+  (if (RdfQuadConsumer/isBlank s) (blank-node s) (uri s)))
 
-(defn as-triples
-  [^RdfGraph graph]
-  (let [g (vec (.toList graph))]
-    (map (fn [^RdfTriple t]
-           [(rsc (.getSubject t)) (rsc (.getPredicate t)) (rsc (.getObject t))])
-         g)))
+(defn to-object
+  [s dt l]
+  (when-not (RdfQuadConsumer/isValidObject dt l nil)
+    (throw (ex-info "Unexpected Object data" {:object s :datatype dt :language l})))
+  (cond
+    (RdfQuadConsumer/isLiteral dt l nil) (if (RdfQuadConsumer/isLangString dt l nil)
+                                           (ttl/lang-literal s l)
+                                           (if dt
+                                             (if (= xsd-string dt) s (ttl/typed-literal s (uri dt)))
+                                             s))
+    (RdfQuadConsumer/isBlank s) (blank-node s)
+    :default (uri s)))
 
-(defn graphs
-  "Returns a map of graph names mapped to the graphs"
-  [^ToRdfApi rdf]
-  (let [^RdfDataset ds (.get rdf)]
-    (reduce (fn [gs ^RdfResource gn]
-              (let [nm (if (.isIRI gn) (uri (.toValue gn)) gn)
-                    ^Optional grapho (.getGraph ds gn)]
-                (if (.isPresent grapho)
-                  (assoc gs nm (as-triples (.getGraph ds gn)))
-                  (throw (ex-info (str "Unexpected missing graph:" nm) {:graph gn :dataset ds})))))
-            {:default (as-triples (.getDefaultGraph ds))}
-            (.getGraphNames ds))))
+(defrecord QuadReceiver [vtriples]
+  RdfQuadConsumer
+  (quad [this subject predicate object datatype language _ _]
+    (vswap! vtriples conj!
+            [(to-subject subject) (uri predicate) (to-object object datatype language)])
+    this))
+
+(def mapper (ObjectMapper.))
+
+(defn input-stream-string
+  [s]
+  (ByteArrayInputStream. (.getBytes s "UTF-8")))
 
 (defn string->graphs
   "Converts a JSON-LD string to a graph"
   [s]
   (reset-context!)
-  (-> (StringReader. s)
-      JsonDocument/of
-      JsonLd/toRdf
-      graphs))
+  (let [parse #(.parse (Jackson2Parser. mapper) %)
+        options (Options/newOptions)
+        vtriples (volatile! (transient []))
+        rdf-consumer (->QuadReceiver vtriples)] 
+    (-> (input-stream-string s)
+        parse
+        Document/of
+        (JsonLd/toRdf rdf-consumer options))
+    (persistent! @vtriples)))
+

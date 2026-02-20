@@ -153,7 +153,6 @@
         :body
         context-update
         jsld/string->graphs
-        :default
         into-graph)))
 
 (defn icd-entity

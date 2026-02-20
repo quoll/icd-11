@@ -17,11 +17,11 @@
 (def ICD-ENV-ID "ICD_ID")
 (def ICD-ENV-SECRET "ICD_SECRET")
 
-(def DEFAULT-RELEASE "2023-01")
+(def DEFAULT-RELEASE "2025-01")
 (def MMS "Mortality and Morbidity Statistics" "mms")
 (def DEFAULT-LINEARIZATION "Mortality and Morbidity Statistics" MMS)
 
-(def local-server "zhuli")  ;; my personal server
+(def local-server "localhost")  ;; my personal server
 
 (defn get-credentials
   "Reads credentials file, when available. Overwrites with environment variables, if present."
