@@ -3,10 +3,6 @@
   (:require [clojure.tools.build.api]
             [org.corfield.build :as bb]))
 
-(def pom "build-rsc/pom.xml")
-(def lib 'org.clojars.quoll/icd11-export)
-(def version "0.0.1")
-
 ;; clojure -T:build test
 (defn test "Run the tests." [opts]
   (bb/run-tests opts))
@@ -19,14 +15,3 @@
       (bb/clean)
       (bb/jar)))
 
-;; clojure -T:build install
-(defn install "Install the JAR locally." [opts]
-  (-> opts
-      (assoc :lib lib :version version)
-      (bb/install)))
-
-;; clojure -T:build deploy
-(defn deploy "Deploy the JAR to Clojars." [opts]
-  (-> opts
-      (assoc :lib lib :version version)
-      (bb/deploy)))
