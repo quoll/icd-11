@@ -32,7 +32,7 @@
 (def browser-url (uri "http://id.who.int/icd/schema/browserUrl"))
 
 (def PREFIXES {:skos "http://www.w3.org/2004/02/skos/core#"
-               :skos-xl "http://www.w3.org/2008/05/skos-xl#"
+               :skosxl "http://www.w3.org/2008/05/skos-xl#"
                :icds "http://id.who.int/icd/schema/"
                :icd "http://id.who.int/icd/entity/"})
 
