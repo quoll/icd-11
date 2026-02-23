@@ -7,12 +7,11 @@
             [clojure.set :as set]
             [clojure.java.io :as io]
             [donatello.ttl :as ttl]
-            [babashka.http-client :as http]
-            [clojure.tools.cli :refer [parse-opts]])
+            [babashka.http-client :as http])
   (:import [java.net URI]
-           [donatello.ttl BlankNode]))
+           [quoll.rdf BlankNode]))
 
-(def limit nil) ;; set to the number of entities to traverse
+(def limit nil) ;; debug limit to set the number of entities to traverse
 
 (def RETRIES 1)
 
@@ -56,16 +55,16 @@
            graph
            triples)))
 
-(defprotocol Blank? (blank? [n]))
+(defprotocol Blank? (blank? [node]))
 
 (extend-protocol Blank?
   BlankNode
-  (blank? [n] true)
+  (blank? [_] true)
   Object
-  (blank? [n] false))
+  (blank? [_] false))
 
 (defn fix-browser-url
-  "Local installations provide broken URLs, with the Release value in the path."
+  "Local installations provided broken URLs up to 2023, with the Release value in the path."
   [u]
   (let [s (str u)]
     (uri (s/replace s #"icd.who.int/browse11_\d\d\d\d-\d\d/" "icd.who.int/browse11/"))))
@@ -114,7 +113,7 @@
   "Initializes authentication, returning it as an authentication object.
   If authentication is provided along with a client-id and client-secret, then it will still be used,
   but the credentials will be attached for future renewals."
-  [{:keys [client secret auth] :as opts}]
+  [{:keys [client secret auth]}]
   (cond
     auth (cond-> {:auth (atom auth)}
            (and client secret) (assoc :client client
@@ -135,11 +134,11 @@
 (defn headers
   "Returns the appropriate header info for a request"
   ([] (headers nil))
-  ([authentication]
+  ([{authorization :auth}]
    (cond-> {:accept "application/json"
             :API-Version "v2"
             :Accept-Language "en"}
-     authentication (assoc :Authorization @(:auth authentication)))))
+     authorization (assoc :Authorization @authorization))))
 
 (defn request-object
   [get-thunk context-update authentication]
@@ -152,7 +151,7 @@
     (-> resp
         :body
         context-update
-        jsld/string->graphs
+        jsld/string->triples
         into-graph)))
 
 (defn icd-entity
@@ -198,7 +197,7 @@
   (let [path (.getPath entity-url)]
     (subs path (inc (s/last-index-of path \/)))))
 
-(defn load-all-entities
+(defn extract-all-entities
   [out opts]
   (let [get-entity #(icd-entity opts %)
         top-graph (icd-entity opts)
@@ -220,7 +219,7 @@
             (do (println counter "entities")
                 counter)))))))
 
-(defn load-all-linear
+(defn extract-all-linear
   [out {:keys [release linearization] :as opts}]
   (let [linearization-object (get-linearization-object release linearization)
         get-linear #(get-linearization opts (linearization-id %))
@@ -248,17 +247,17 @@
   (binding [ttl/*context-prefixes* PREFIXES]
     (with-open [out (io/writer outfile)]
       (ttl/write-prefixes! out PREFIXES)
-      (load-all-entities out opts))))
+      (extract-all-entities out opts))))
 
 (defn linearization-main
   [{:keys [linear] :as opts}]
   (binding [ttl/*context-prefixes* LINEAR-PREFIXES]
     (with-open [out (io/writer linear)]
       (ttl/write-prefixes! out LINEAR-PREFIXES)
-      (load-all-linear out opts))))
+      (extract-all-linear out opts))))
 
 (defn -main [& args]
-  (let [{:keys [help auth outfile linear] :as opts} (init/get-setup args)
+  (let [{:keys [help outfile linear] :as opts} (init/get-setup args)
         _ (when help
             (init/print-usage)
             (System/exit 0))
@@ -269,8 +268,8 @@
       (binding [ttl/*context-prefixes* LINEAR-PREFIXES]
         (with-open [out (io/writer outfile)]
           (ttl/write-prefixes! out LINEAR-PREFIXES)
-          (load-all-entities out options)
-          (load-all-linear out options)))
+          (extract-all-entities out options)
+          (extract-all-linear out options)))
       (do
         (entity-main options)
         (linearization-main options)))))

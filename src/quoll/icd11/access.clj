@@ -1,9 +1,7 @@
 (ns ^{:author "Paula Gearon"}
     quoll.icd11.access
-  (:require [clojure.string :as s]
-            [clojure.data.json :as json]
-            [babashka.http-client :as http])
-  (:import [java.io StringReader]))
+  (:require [clojure.data.json :as json]
+            [babashka.http-client :as http]))
 
 (def AUTH-URI "https://icdaccessmanagement.who.int/connect/token")
 

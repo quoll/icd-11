@@ -1,6 +1,6 @@
 (ns ^{:author "Paula Gearon"}
     quoll.icd11.json-ld
-  (:require [donatello.ttl :as ttl])
+  (:require [quoll.rdf :as rdf])
   (:import [java.io ByteArrayInputStream]
            [java.net URI]
            [com.fasterxml.jackson.databind ObjectMapper]
@@ -18,7 +18,7 @@
 (defn blank-node
   [id]
   (or (@blank-node-context id)
-      (let [n (ttl/blank-node)]
+      (let [n (rdf/blank-node)]
         (vswap! blank-node-context assoc id n)
         n)))
 
@@ -37,12 +37,12 @@
     (throw (ex-info "Unexpected Object data" {:object s :datatype dt :language l})))
   (cond
     (RdfQuadConsumer/isLiteral dt l nil) (if (RdfQuadConsumer/isLangString dt l nil)
-                                           (ttl/lang-literal s l)
+                                           (rdf/lang-literal s l)
                                            (if dt
-                                             (if (= xsd-string dt) s (ttl/typed-literal s (uri dt)))
+                                             (if (= xsd-string dt) s (rdf/typed-literal s (uri dt)))
                                              s))
     (RdfQuadConsumer/isBlank s) (blank-node s)
-    :default (uri s)))
+    :else (uri s)))
 
 (defrecord QuadReceiver [vtriples]
   RdfQuadConsumer
@@ -57,7 +57,7 @@
   [s]
   (ByteArrayInputStream. (.getBytes s "UTF-8")))
 
-(defn string->graphs
+(defn string->triples
   "Converts a JSON-LD string to a graph"
   [s]
   (reset-context!)

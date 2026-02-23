@@ -6,6 +6,8 @@
             [clojure.tools.cli :as cli])
   (:import [java.util Properties]))
 
+;; Define defaults
+
 (def CENTRAL-HOST "id.who.int")
 (def CENTRAL-PORT 443)
 
